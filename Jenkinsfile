@@ -17,9 +17,14 @@ pipeline {
         stage('Ejecutar JMeter') {
             steps {
                 bat '''
+                    if exist results.jtl del /Q results.jtl
+                    if exist jmeter-report rmdir /S /Q jmeter-report
+        
                     "%JMETER_HOME%\\bin\\jmeter.bat" -n ^
                     -t jmeter\\test.jmx ^
-                    -l results.jtl
+                    -l results.jtl ^
+                    -e ^
+                    -o jmeter-report
                 '''
             }
         }
@@ -33,7 +38,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: 'results.jtl',
+            archiveArtifacts artifacts: 'results.jtl, jmeter-report/**/*',
                              allowEmptyArchive: true
         }
     }
