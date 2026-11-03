@@ -1,20 +1,24 @@
 pipeline {
     agent any
 
+    environment {
+        JMETER_HOME = 'C:\\apache-jmeter-5.6.3\\apache-jmeter-5.6.3'
+    }
+
     stages {
 
         stage('Verificar entorno') {
             steps {
                 bat 'java -version'
-                bat 'jmeter --version'
+                bat '"%JMETER_HOME%\\bin\\jmeter.bat" --version'
             }
         }
 
         stage('Ejecutar JMeter') {
             steps {
                 bat '''
-                    jmeter -n ^
-                    -t jmeter/test.jmx ^
+                    "%JMETER_HOME%\\bin\\jmeter.bat" -n ^
+                    -t jmeter\\test.jmx ^
                     -l results.jtl
                 '''
             }
