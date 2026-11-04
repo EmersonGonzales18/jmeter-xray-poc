@@ -6,7 +6,6 @@ import com.jmeterxray.config.JiraConfig;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -923,5 +922,160 @@ public final class JiraApiClient {
                             + response.body()
             );
         }
+    }
+
+    // ============================================================
+    // TEST EXECUTION
+    // ============================================================
+
+    public JsonNode createTestExecution(
+            String token,
+            String summary,
+            String testIssueId)
+            throws IOException, InterruptedException {
+
+        String query = """
+                mutation CreateTestExecution(
+                    $testIssueIds: [String],
+                    $jira: JSON!
+                ) {
+                    createTestExecution(
+                        testIssueIds: $testIssueIds,
+                        jira: $jira
+                    ) {
+                        testExecution {
+                            issueId
+                            jira(fields: ["key"])
+                            testRuns(limit: 100) {
+                                results {
+                                    id
+                                    test {
+                                        issueId
+                                        jira(fields: ["key"])
+                                    }
+                                }
+                            }
+                        }
+                        warnings
+                    }
+                }
+                """;
+
+        Map<String, Object> jira =
+                Map.of(
+                        "fields",
+                        Map.of(
+                                "summary", summary,
+                                "project",
+                                Map.of(
+                                        "key",
+                                        config.getProjectKey()
+                                )
+                        )
+                );
+
+        Map<String, Object> variables =
+                Map.of(
+                        "jira", jira,
+                        "testIssueIds", List.of(testIssueId)
+                );
+
+        JsonNode data =
+                executeGraphql(
+                        token,
+                        query,
+                        variables
+                );
+
+        JsonNode execution =
+                data.path("createTestExecution")
+                        .path("testExecution");
+
+        if (execution.path("issueId").asText().isBlank()) {
+
+            throw new IOException(
+                    "Xray no devolvio Test Execution: "
+                            + data
+            );
+        }
+
+        return execution;
+    }
+
+
+    public void updateTestRunStatus(
+        String token,
+        String testRunId,
+        String status)
+        throws IOException, InterruptedException {
+
+        String query = """
+                mutation UpdateTestRun(
+                    $id: String!,
+                    $status: String!
+                ) {
+                    updateTestRunStatus(
+                        id: $id,
+                        status: $status
+                    )
+                }
+                """;
+
+        executeGraphql(
+                token,
+                query,
+                Map.of(
+                        "id", testRunId,
+                        "status", status
+                )
+        );
+
+        System.out.println(
+                "Test Run "
+                        + testRunId
+                        + " -> "
+                        + status
+        );
+    }
+
+
+
+    public void addTestExecutionToTestPlan(
+        String token,
+        String testPlanIssueId,
+        String testExecutionIssueId)
+        throws IOException, InterruptedException {
+
+        String query = """
+                mutation AddExecutionToPlan(
+                    $planId: String!,
+                    $executionIds: [String]!
+                ) {
+                    addTestExecutionsToTestPlan(
+                        issueId: $planId,
+                        testExecIssueIds: $executionIds
+                    ) {
+                        addedTestExecutions
+                        warning
+                    }
+                }
+                """;
+
+        executeGraphql(
+                token,
+                query,
+                Map.of(
+                        "planId", testPlanIssueId,
+                        "executionIds",
+                        List.of(testExecutionIssueId)
+                )
+        );
+
+        System.out.println(
+                "Test Execution "
+                        + testExecutionIssueId
+                        + " asociado al Test Plan "
+                        + testPlanIssueId
+        );
     }
 }
