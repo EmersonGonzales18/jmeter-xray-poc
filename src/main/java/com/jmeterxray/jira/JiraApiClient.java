@@ -1078,4 +1078,41 @@ public final class JiraApiClient {
                         + testPlanIssueId
         );
     }
+
+    public void addTestsToTestPlan(
+            String token,
+            String testPlanIssueId,
+            List<String> testIssueIds)
+            throws IOException, InterruptedException {
+
+        String query = """
+                mutation AddTestsToTestPlan(
+                    $issueId: String!,
+                    $testIssueIds: [String]!
+                ) {
+                    addTestsToTestPlan(
+                        issueId: $issueId,
+                        testIssueIds: $testIssueIds
+                    ) {
+                        addedTests
+                        warning
+                    }
+                }
+                """;
+
+        JsonNode data =
+                executeGraphql(
+                        token,
+                        query,
+                        Map.of(
+                                "issueId", testPlanIssueId,
+                                "testIssueIds", testIssueIds
+                        )
+                );
+
+        System.out.println(
+                "Tests agregados al Test Plan: "
+                        + testIssueIds.size()
+        );
+    }
 }

@@ -269,6 +269,35 @@ public final class JMeterXrayOrchestrator {
             );
         }
 
+        // =============================================
+        // NUEVO: agregar Tests realmente al Test Plan
+        // =============================================
+
+        System.out.println();
+        System.out.println(
+                "Agregando Tests al Test Plan..."
+        );
+
+        apiClient.addTestsToTestPlan(
+                token,
+                testPlanIssueId,
+                testIssueIds
+        );
+
+        // =============================================
+        // Vinculo visual Test Set -> Test Plan
+        // =============================================
+
+        System.out.println();
+        System.out.println(
+                "Vinculando Test Set con Test Plan..."
+        );
+
+        apiClient.linkTestSetToTestPlan(
+                testSetKey,
+                testPlanKey
+        );
+
         // --------------------------------------------------------
         // 7. Vincular Test Set -> Test Plan
         // --------------------------------------------------------
