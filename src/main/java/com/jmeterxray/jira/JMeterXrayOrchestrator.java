@@ -516,41 +516,95 @@ public final class JMeterXrayOrchestrator {
     }
 
     private boolean jmeterExecutionPassed(
-        Path jtlFile)
-        throws Exception {
+            Path jtlFile)
+            throws IOException {
 
-    if (!Files.isRegularFile(jtlFile)) {
+        if (!Files.isRegularFile(jtlFile)) {
 
-        throw new IOException(
-                "No existe el resultado JMeter: "
-                        + jtlFile.toAbsolutePath()
-        );
-    }
+            throw new IOException(
+                    "No existe el resultado JMeter: "
+                            + jtlFile.toAbsolutePath()
+            );
+        }
 
-        DocumentBuilderFactory factory =
-                DocumentBuilderFactory.newInstance();
+        List<String> lines =
+                Files.readAllLines(jtlFile);
 
-        DocumentBuilder builder =
-                factory.newDocumentBuilder();
+        if (lines.size() < 2) {
 
-        Document document =
-                builder.parse(
-                        jtlFile.toFile()
+            throw new IOException(
+                    "El JTL no contiene resultados: "
+                            + jtlFile
+            );
+        }
+
+        /*
+        * Primera linea del JTL CSV:
+        *
+        * timeStamp,elapsed,label,responseCode,
+        * responseMessage,threadName,dataType,
+        * success,...
+        */
+
+        String header = lines.get(0);
+
+        String[] columns =
+                header.split(",", -1);
+
+        int successIndex = -1;
+
+        for (int i = 0; i < columns.length; i++) {
+
+            if ("success".equalsIgnoreCase(
+                    columns[i].trim())) {
+
+                successIndex = i;
+                break;
+            }
+        }
+
+        if (successIndex == -1) {
+
+            throw new IOException(
+                    "El JTL no contiene la columna 'success': "
+                            + header
+            );
+        }
+
+        int totalSamples = 0;
+        int failedSamples = 0;
+
+        for (int i = 1; i < lines.size(); i++) {
+
+            String line =
+                    lines.get(i).trim();
+
+            if (line.isBlank()) {
+                continue;
+            }
+
+            String[] values =
+                    line.split(",", -1);
+
+            if (values.length <= successIndex) {
+
+                throw new IOException(
+                        "Fila JTL invalida: "
+                                + line
                 );
+            }
 
-        NodeList httpSamples =
-                document.getElementsByTagName(
-                        "httpSample"
-                );
+            totalSamples++;
 
-        NodeList samples =
-                document.getElementsByTagName(
-                        "sample"
-                );
+            boolean success =
+                    Boolean.parseBoolean(
+                            values[successIndex].trim()
+                    );
 
-        int totalSamples =
-                httpSamples.getLength()
-                        + samples.getLength();
+            if (!success) {
+                failedSamples++;
+            }
+        }
 
         if (totalSamples == 0) {
 
@@ -560,42 +614,18 @@ public final class JMeterXrayOrchestrator {
             );
         }
 
-        // HTTP Samples
-        for (int i = 0;
-            i < httpSamples.getLength();
-            i++) {
+        System.out.println(
+                "Samples ejecutados: "
+                        + totalSamples
+        );
 
-            Element sample =
-                    (Element) httpSamples.item(i);
+        System.out.println(
+                "Samples fallidos: "
+                        + failedSamples
+        );
 
-            String success =
-                    sample.getAttribute("s");
-
-            if (!Boolean.parseBoolean(success)) {
-                return false;
-            }
-        }
-
-        // Samples genericos
-        for (int i = 0;
-            i < samples.getLength();
-            i++) {
-
-            Element sample =
-                    (Element) samples.item(i);
-
-            String success =
-                    sample.getAttribute("s");
-
-            if (!Boolean.parseBoolean(success)) {
-                return false;
-            }
-        }
-
-        return true;
+        return failedSamples == 0;
     }
-
-
 
     public void publishResults()
         throws Exception {
