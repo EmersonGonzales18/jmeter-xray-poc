@@ -713,6 +713,89 @@ public final class JiraApiClient {
     // XRAY GRAPHQL
     // ============================================================
 
+    private JsonNode createXrayIssue(
+            String token,
+            String mutation,
+            String resultField,
+            String summary,
+            List<String> testIssueIds)
+            throws IOException, InterruptedException {
+
+        String query = """
+                mutation CreateXrayIssue(
+                    $testIssueIds: [String],
+                    $jira: JSON!
+                ) {
+                    %s(
+                        testIssueIds: $testIssueIds,
+                        jira: $jira
+                    ) {
+                        %s {
+                            issueId
+                            jira(fields: ["key"])
+                        }
+                        warnings
+                    }
+                }
+                """.formatted(
+                        mutation,
+                        resultField
+                );
+
+        Map<String, Object> jira =
+                Map.of(
+                        "fields",
+                        Map.of(
+                                "summary", summary,
+                                "project",
+                                Map.of(
+                                        "key",
+                                        config.getProjectKey()
+                                )
+                        )
+                );
+
+        Map<String, Object> variables =
+                new HashMap<>();
+
+        variables.put(
+                "jira",
+                jira
+        );
+
+        if (testIssueIds != null) {
+            variables.put(
+                    "testIssueIds",
+                    testIssueIds
+            );
+        }
+
+        JsonNode data =
+                executeGraphql(
+                        token,
+                        query,
+                        variables
+                );
+
+        JsonNode issue =
+                data.path(mutation)
+                        .path(resultField);
+
+        if (issue.path("issueId")
+                .asText()
+                .isBlank()) {
+
+            throw new IOException(
+                    "Xray no devolvio issueId para "
+                            + resultField
+                            + ": "
+                            + data
+            );
+        }
+
+        return issue;
+    }
+
     private JsonNode executeGraphql(
             String token,
             String query,
