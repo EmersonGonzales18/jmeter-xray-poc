@@ -628,24 +628,22 @@ public final class JMeterXrayOrchestrator {
     }
 
     public void publishResults()
-        throws Exception {
+            throws Exception {
 
-    System.out.println();
-    System.out.println(
-            "========================================"
-    );
+        System.out.println();
+        System.out.println(
+                "========================================"
+        );
+        System.out.println(
+                " PUBLICANDO RESULTADOS JMETER -> XRAY"
+        );
+        System.out.println(
+                "========================================"
+        );
 
-    System.out.println(
-            " PUBLICANDO RESULTADOS JMETER -> XRAY"
-    );
-
-    System.out.println(
-            "========================================"
-    );
-
-    // --------------------------------------------------------
-    // 1. Comprobar contexto
-    // --------------------------------------------------------
+        // ========================================================
+        // 1. Validar contexto
+        // ========================================================
 
         if (!Files.isRegularFile(CONTEXT_PATH)) {
 
@@ -655,19 +653,15 @@ public final class JMeterXrayOrchestrator {
             );
         }
 
-        // --------------------------------------------------------
-        // 2. Cargar configuracion
-        // --------------------------------------------------------
+        // ========================================================
+        // 2. Configuracion + autenticacion
+        // ========================================================
 
         JiraConfig config =
                 JiraConfig.fromFile();
 
         JiraApiClient apiClient =
                 new JiraApiClient(config);
-
-        // --------------------------------------------------------
-        // 3. Autenticar Xray
-        // --------------------------------------------------------
 
         System.out.println();
         System.out.println(
@@ -681,17 +675,15 @@ public final class JMeterXrayOrchestrator {
                 "Autenticacion Xray: OK"
         );
 
-        // --------------------------------------------------------
-        // 4. Leer contexto generado por prepare
-        // --------------------------------------------------------
+        // ========================================================
+        // 3. Leer contexto
+        // ========================================================
 
         java.util.Properties context =
                 new java.util.Properties();
 
         try (var input =
-                    Files.newInputStream(
-                            CONTEXT_PATH
-                    )) {
+                    Files.newInputStream(CONTEXT_PATH)) {
 
             context.load(input);
         }
@@ -720,13 +712,11 @@ public final class JMeterXrayOrchestrator {
 
         System.out.println();
         System.out.println(
-                "Test Plan: "
-                        + testPlanKey
+                "Test Plan: " + testPlanKey
         );
 
         System.out.println(
-                "Test Set: "
-                        + testSetKey
+                "Test Set: " + testSetKey
         );
 
         System.out.println(
@@ -734,9 +724,116 @@ public final class JMeterXrayOrchestrator {
                         + threadGroupCount
         );
 
-        // --------------------------------------------------------
-        // 5. Procesar cada Thread Group
-        // --------------------------------------------------------
+        // ========================================================
+        // 4. Obtener TODOS los Test issueIds
+        // ========================================================
+
+        List<String> testIssueIds =
+                new ArrayList<>();
+
+        for (int i = 0;
+            i < threadGroupCount;
+            i++) {
+
+            String testIssueId =
+                    context.getProperty(
+                            "threadGroup."
+                                    + i
+                                    + ".testIssueId"
+                    );
+
+            if (testIssueId == null
+                    || testIssueId.isBlank()) {
+
+                throw new IOException(
+                        "No existe testIssueId para Thread Group "
+                                + i
+                );
+            }
+
+            testIssueIds.add(
+                    testIssueId
+            );
+        }
+
+        // ========================================================
+        // 5. Crear UNA SOLA Test Execution
+        // ========================================================
+
+        String summary =
+                "JMeter Execution - "
+                        + testPlanKey;
+
+        System.out.println();
+        System.out.println(
+                "Creando Test Execution unica..."
+        );
+
+        JsonNode execution =
+                apiClient.createTestExecution(
+                        token,
+                        summary,
+                        testIssueIds
+                );
+
+        String executionKey =
+                execution.path("jira")
+                        .path("key")
+                        .asText();
+
+        String executionIssueId =
+                execution.path("issueId")
+                        .asText();
+
+        if (executionKey.isBlank()
+                || executionIssueId.isBlank()) {
+
+            throw new IOException(
+                    "Xray no devolvio key/issueId "
+                            + "del Test Execution."
+            );
+        }
+
+        System.out.println(
+                "Test Execution creado: "
+                        + executionKey
+        );
+
+        // ========================================================
+        // 6. Asociar UNA Test Execution al Test Plan
+        // ========================================================
+
+        apiClient.addTestExecutionToTestPlan(
+                token,
+                testPlanIssueId,
+                executionIssueId
+        );
+
+        // ========================================================
+        // 7. Obtener los Test Runs
+        // ========================================================
+
+        JsonNode testRuns =
+                execution.path("testRuns")
+                        .path("results");
+
+        if (!testRuns.isArray()
+                || testRuns.isEmpty()) {
+
+            throw new IOException(
+                    "Xray no devolvio Test Runs para "
+                            + executionKey
+            );
+        }
+
+        System.out.println(
+                "Test Runs creados: "
+                        + testRuns.size()
+        );
+
+        // ========================================================
+        // 8. Procesar cada Thread Group
+        // ========================================================
 
         for (int i = 0;
             i < threadGroupCount;
@@ -764,7 +861,7 @@ public final class JMeterXrayOrchestrator {
                     );
 
             // ----------------------------------------------------
-            // Construir el mismo nombre usado por el splitter
+            // Nombre utilizado por el splitter
             // ----------------------------------------------------
 
             String safeName =
@@ -778,7 +875,7 @@ public final class JMeterXrayOrchestrator {
                                     ""
                             );
 
-            String executionName =
+            String resultName =
                     String.format(
                             "%02d-%s",
                             i + 1,
@@ -788,7 +885,7 @@ public final class JMeterXrayOrchestrator {
             Path jtlFile =
                     Path.of(
                             "results",
-                            executionName + ".jtl"
+                            resultName + ".jtl"
                     );
 
             System.out.println();
@@ -811,9 +908,9 @@ public final class JMeterXrayOrchestrator {
                             + jtlFile
             );
 
-            // ----------------------------------------------------
-            // 6. Determinar PASSED / FAILED
-            // ----------------------------------------------------
+            // ====================================================
+            // 9. Leer resultado JMeter
+            // ====================================================
 
             boolean passed =
                     jmeterExecutionPassed(
@@ -830,79 +927,45 @@ public final class JMeterXrayOrchestrator {
                             + status
             );
 
-            // ----------------------------------------------------
-            // 7. Crear Test Execution
-            // ----------------------------------------------------
+            // ====================================================
+            // 10. Encontrar Test Run correspondiente al Test
+            // ====================================================
 
-            String summary =
-                    "JMeter Execution - "
-                            + threadGroupName
-                            + " - "
-                            + testPlanKey;
+            String testRunId = null;
 
-            JsonNode execution =
-                    apiClient.createTestExecution(
-                            token,
-                            summary,
-                            testIssueId
-                    );
+            for (JsonNode testRun : testRuns) {
 
-            String executionKey =
-                    execution.path("jira")
-                            .path("key")
-                            .asText();
+                String runTestIssueId =
+                        testRun.path("test")
+                                .path("issueId")
+                                .asText();
 
-            String executionIssueId =
-                    execution.path("issueId")
-                            .asText();
+                if (testIssueId.equals(
+                        runTestIssueId)) {
 
-            if (executionKey.isBlank()
-                    || executionIssueId.isBlank()) {
+                    testRunId =
+                            testRun.path("id")
+                                    .asText();
+
+                    break;
+                }
+            }
+
+            if (testRunId == null
+                    || testRunId.isBlank()) {
 
                 throw new IOException(
-                        "Xray no devolvio key/issueId "
-                                + "del Test Execution."
+                        "No se encontro Test Run para "
+                                + testKey
+                                + " (issueId "
+                                + testIssueId
+                                + ")"
                 );
             }
 
-            System.out.println(
-                    "Test Execution creado: "
-                            + executionKey
-            );
-
-            // ----------------------------------------------------
-            // 8. Obtener Test Run creado automáticamente
-            // ----------------------------------------------------
-
-            JsonNode testRuns =
-                    execution.path("testRuns")
-                            .path("results");
-
-            if (!testRuns.isArray()
-                    || testRuns.isEmpty()) {
-
-                throw new IOException(
-                        "Xray no devolvio Test Run para "
-                                + executionKey
-                );
-            }
-
-            String testRunId =
-                    testRuns.get(0)
-                            .path("id")
-                            .asText();
-
-            if (testRunId.isBlank()) {
-
-                throw new IOException(
-                        "Xray no devolvio Test Run ID para "
-                                + executionKey
-                );
-            }
-
-            // ----------------------------------------------------
-            // 9. Actualizar estado
-            // ----------------------------------------------------
+            // ====================================================
+            // 11. Actualizar PASSED / FAILED
+            // ====================================================
 
             apiClient.updateTestRunStatus(
                     token,
@@ -910,29 +973,17 @@ public final class JMeterXrayOrchestrator {
                     status
             );
 
-            // ----------------------------------------------------
-            // 10. Asociar Test Execution al Test Plan
-            // ----------------------------------------------------
-
-            apiClient.addTestExecutionToTestPlan(
-                    token,
-                    testPlanIssueId,
-                    executionIssueId
-            );
-
             System.out.println(
                     "OK -> "
-                            + executionKey
-                            + " | "
                             + testKey
                             + " | "
                             + status
             );
         }
 
-        // --------------------------------------------------------
+        // ========================================================
         // FINAL
-        // --------------------------------------------------------
+        // ========================================================
 
         System.out.println();
         System.out.println(
@@ -945,6 +996,21 @@ public final class JMeterXrayOrchestrator {
 
         System.out.println(
                 "========================================"
+        );
+
+        System.out.println(
+                "Test Plan:      "
+                        + testPlanKey
+        );
+
+        System.out.println(
+                "Test Execution: "
+                        + executionKey
+        );
+
+        System.out.println(
+                "Tests:          "
+                        + threadGroupCount
         );
     }
 }

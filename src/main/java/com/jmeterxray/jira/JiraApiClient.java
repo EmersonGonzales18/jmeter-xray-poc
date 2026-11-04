@@ -931,7 +931,7 @@ public final class JiraApiClient {
     public JsonNode createTestExecution(
             String token,
             String summary,
-            String testIssueId)
+            List<String> testIssueIds)
             throws IOException, InterruptedException {
 
         String query = """
@@ -977,7 +977,7 @@ public final class JiraApiClient {
         Map<String, Object> variables =
                 Map.of(
                         "jira", jira,
-                        "testIssueIds", List.of(testIssueId)
+                        "testIssueIds", testIssueIds
                 );
 
         JsonNode data =
