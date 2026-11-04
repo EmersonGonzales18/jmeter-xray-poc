@@ -1,0 +1,26 @@
+name: Test GitHub Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Imprimir mensaje
+        run: echo "Hola, GitHub Actions esta funcionando"
+
+      - name: Mostrar sistema
+        run: |
+          echo "Sistema operativo:"
+          uname -a
+
+          echo "Usuario:"
+          whoami
+
+          echo "Directorio:"
+          pwd
+
+      - name: Finalizar
+        run: echo "Prueba terminada correctamente"
