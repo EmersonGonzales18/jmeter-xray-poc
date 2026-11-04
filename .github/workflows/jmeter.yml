@@ -31,14 +31,15 @@ jobs:
       # Validar configuración Jira/Xray
       # -----------------------------
 
-      - name: Validate Jira Configuration
+      - name: Prepare Jira Xray
         env:
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
           XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
         run: |
-          java -cp target/classes com.jmeterxray.config.ConfigTest
+          mvn exec:java \
+            -Dexec.mainClass=com.jmeterxray.JMeterXrayOrchestrator
 
       # -----------------------------
       # Separar Thread Groups

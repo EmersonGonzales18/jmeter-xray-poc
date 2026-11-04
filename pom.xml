@@ -16,6 +16,25 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <!-- ========================================== -->
+    <!-- DEPENDENCIAS                              -->
+    <!-- ========================================== -->
+
+    <dependencies>
+
+        <!-- JSON para Jira / Xray -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.18.2</version>
+        </dependency>
+
+    </dependencies>
+
+    <!-- ========================================== -->
+    <!-- BUILD                                     -->
+    <!-- ========================================== -->
+
     <build>
         <plugins>
 
@@ -39,6 +58,12 @@
                         </manifest>
                     </archive>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
             </plugin>
 
         </plugins>
