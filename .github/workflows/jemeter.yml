@@ -4,65 +4,112 @@ on:
   workflow_dispatch:
 
 jobs:
-  jmeter-test:
-    name: Ejecutar JMeter
+
+  performance-tests:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # 1. Descargar repositorio
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Instalar Java 21
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
 
-      # 3. Descargar JMeter
+      # -----------------------------
+      # Compilar nuestro Java
+      # -----------------------------
+
+      - name: Build Java Integrator
+        run: mvn clean package
+
+      # -----------------------------
+      # Separar Thread Groups
+      # -----------------------------
+
+      - name: Detect Thread Groups
+        run: |
+          java -jar target/jmeter-xray-integrator-1.0.0.jar
+
+          echo "JMX generados:"
+          ls -la temp/
+
+      # -----------------------------
+      # Instalar JMeter
+      # -----------------------------
+
       - name: Install JMeter 5.6.3
         run: |
           wget https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-5.6.3.tgz
+
           tar -xzf apache-jmeter-5.6.3.tgz
+
           echo "$GITHUB_WORKSPACE/apache-jmeter-5.6.3/bin" >> "$GITHUB_PATH"
 
-      # 4. Comprobar entorno
-      - name: Verify environment
-        run: |
-          java -version
-          jmeter --version
+      - name: Verify JMeter
+        run: jmeter --version
 
-      # 5. Ejecutar JMeter
-      - name: Run JMeter
+      # -----------------------------
+      # Ejecutar secuencialmente
+      # -----------------------------
+
+      - name: Run Thread Groups
         run: |
+
           mkdir -p results
           mkdir -p reports
 
-          jmeter \
-            -n \
-            -t jmeter/test.jmx \
-            -l results/results.jtl \
-            -e \
-            -o reports/jmeter-report
+          for jmx in temp/*.jmx
+          do
 
-      # 6. Mostrar archivos generados
-      - name: Verify results
+            name=$(basename "$jmx" .jmx)
+
+            echo ""
+            echo "======================================"
+            echo " Ejecutando: $name"
+            echo "======================================"
+
+            jmeter \
+              -n \
+              -t "$jmx" \
+              -l "results/$name.jtl" \
+              -e \
+              -o "reports/$name"
+
+            echo ""
+            echo "Finalizado: $name"
+
+          done
+
+      # -----------------------------
+      # Verificar
+      # -----------------------------
+
+      - name: Verify Reports
         if: always()
         run: |
-          echo "=== RESULTS ==="
-          find results -type f || true
 
-          echo "=== REPORT ==="
-          find reports -type f || true
+          echo "======= JTL ======="
+          find results -name "*.jtl" || true
 
-      # 7. Guardar resultados
-      - name: Upload JMeter results
+          echo ""
+          echo "======= REPORTES ======="
+          find reports -name "index.html" || true
+
+      # -----------------------------
+      # Guardar artifacts
+      # -----------------------------
+
+      - name: Upload JMeter Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jmeter-results
+          name: jmeter-thread-group-reports
           path: |
             results/
             reports/
