@@ -21,6 +21,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import com.jmeterxray.report.JMeterMetrics;
+import com.jmeterxray.report.JMeterPdfReportGenerator;
+import com.jmeterxray.report.JMeterResultParser;
+
 public final class JMeterXrayOrchestrator {
 
 
@@ -282,20 +286,6 @@ public final class JMeterXrayOrchestrator {
                 token,
                 testPlanIssueId,
                 testIssueIds
-        );
-
-        // =============================================
-        // Vinculo visual Test Set -> Test Plan
-        // =============================================
-
-        System.out.println();
-        System.out.println(
-                "Vinculando Test Set con Test Plan..."
-        );
-
-        apiClient.linkTestSetToTestPlan(
-                testSetKey,
-                testPlanKey
         );
 
         // --------------------------------------------------------
@@ -656,8 +646,7 @@ public final class JMeterXrayOrchestrator {
         return failedSamples == 0;
     }
 
-    public void publishResults()
-            throws Exception {
+    public void publishResults() throws Exception {
 
         System.out.println();
         System.out.println(
@@ -757,6 +746,12 @@ public final class JMeterXrayOrchestrator {
         // 4. Obtener TODOS los Test issueIds
         // ========================================================
 
+        List<JMeterMetrics> reportMetrics =
+        new ArrayList<>();
+
+        JMeterResultParser resultParser =
+                new JMeterResultParser();
+        
         List<String> testIssueIds =
                 new ArrayList<>();
 
@@ -917,6 +912,15 @@ public final class JMeterXrayOrchestrator {
                             resultName + ".jtl"
                     );
 
+            JMeterMetrics metrics =
+                    resultParser.parse(
+                            jtlFile,
+                            threadGroupName,
+                            testKey
+                    );
+
+            reportMetrics.add(metrics);
+
             System.out.println();
             System.out.println(
                     "----------------------------------------"
@@ -1009,6 +1013,47 @@ public final class JMeterXrayOrchestrator {
                             + status
             );
         }
+
+        Path pdfPath =
+                Path.of(
+                        "target",
+                        "pdf",
+                        "JMeter-Performance-Report-"
+                                + executionKey
+                                + ".pdf"
+                );
+
+        JMeterPdfReportGenerator pdfGenerator =
+                new JMeterPdfReportGenerator();
+
+        pdfGenerator.generate(
+                pdfPath,
+                testPlanKey,
+                executionKey,
+                testSetKey,
+                reportMetrics
+        );
+
+        System.out.println();
+        System.out.println(
+                "PDF generado: "
+                        + pdfPath.toAbsolutePath()
+        );
+        
+        System.out.println(
+        "Adjuntando PDF al Test Execution "
+                + executionKey
+                + "..."
+        );
+
+        apiClient.attachFileToIssue(
+                executionKey,
+                pdfPath
+        );
+
+        System.out.println(
+                "PDF adjuntado al Test Execution."
+        );
 
         // ========================================================
         // FINAL

@@ -18,6 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.UUID;
+
 public final class JiraApiClient {
 
     private final JiraConfig config;
@@ -1113,6 +1117,117 @@ public final class JiraApiClient {
         System.out.println(
                 "Tests agregados al Test Plan: "
                         + testIssueIds.size()
+        );
+    }
+
+    // ============================================================
+    // JIRA ATTACHMENT
+    // ============================================================
+
+    public void attachFileToIssue(
+            String issueKey,
+            Path file)
+            throws IOException, InterruptedException {
+
+        if (!Files.isRegularFile(file)) {
+
+            throw new IOException(
+                    "No existe el archivo a adjuntar: "
+                            + file.toAbsolutePath()
+            );
+        }
+
+        String boundary =
+                "----JMeterXrayBoundary"
+                        + UUID.randomUUID();
+
+        String fileName =
+                file.getFileName().toString();
+
+        byte[] fileBytes =
+                Files.readAllBytes(file);
+
+        String header =
+                "--" + boundary + "\r\n"
+                        + "Content-Disposition: form-data; "
+                        + "name=\"file\"; "
+                        + "filename=\"" + fileName + "\"\r\n"
+                        + "Content-Type: application/pdf\r\n"
+                        + "\r\n";
+
+        String footer =
+                "\r\n--"
+                        + boundary
+                        + "--\r\n";
+
+        byte[] headerBytes =
+                header.getBytes(
+                        StandardCharsets.UTF_8
+                );
+
+        byte[] footerBytes =
+                footer.getBytes(
+                        StandardCharsets.UTF_8
+                );
+
+        HttpRequest.BodyPublisher body =
+                HttpRequest.BodyPublishers.concat(
+                        HttpRequest.BodyPublishers
+                                .ofByteArray(headerBytes),
+
+                        HttpRequest.BodyPublishers
+                                .ofByteArray(fileBytes),
+
+                        HttpRequest.BodyPublishers
+                                .ofByteArray(footerBytes)
+                );
+
+        String url =
+                config.getJiraBaseUrl()
+                        + "/rest/api/3/issue/"
+                        + issueKey
+                        + "/attachments";
+
+        HttpRequest request =
+                HttpRequest.newBuilder()
+                        .uri(URI.create(url))
+                        .timeout(
+                                Duration.ofSeconds(60)
+                        )
+                        .header(
+                                "Authorization",
+                                jiraAuthorizationHeader()
+                        )
+                        .header(
+                                "X-Atlassian-Token",
+                                "no-check"
+                        )
+                        .header(
+                                "Accept",
+                                "application/json"
+                        )
+                        .header(
+                                "Content-Type",
+                                "multipart/form-data; boundary="
+                                        + boundary
+                        )
+                        .POST(body)
+                        .build();
+
+        HttpResponse<String> response =
+                httpClient.send(
+                        request,
+                        HttpResponse.BodyHandlers
+                                .ofString()
+                );
+
+        ensureJiraSuccessful(response);
+
+        System.out.println(
+                "PDF adjuntado correctamente a "
+                        + issueKey
+                        + ": "
+                        + fileName
         );
     }
 }
